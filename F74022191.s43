@@ -1,0 +1,148 @@
+#include "msp430.h"                     ; #define controlled include file
+
+        NAME    main                    ; module name
+
+        PUBLIC  main                    ; make the main label vissible
+                                        ; outside this module
+        ORG     0FFFEh
+        DC16    init                    ; set reset vector to 'init' label
+
+        RSEG    CSTACK                  ; pre-declaration of segment
+        RSEG    CODE                    ; place program in 'CODE' segment
+
+init:   MOV     #SFE(CSTACK), SP        ; set up stack
+
+main:   NOP                             ; main program
+        MOV.W   #WDTPW+WDTHOLD,&WDTCTL  ; Stop watchdog timer
+        mov.b   #00010000b, P1REN
+        mov.b   #00001001b, P1DIR       // P1.0 & P1.3 together
+        mov.b   #00000000b, P1OUT
+        mov.b   #10000000b, P4DIR
+        bis.b   #00000100b, P1DIR
+        mov.b   #00000000b, P4OUT       // P4.7 & P1.2 together
+        bis.b   #00000000b, P1OUT
+
+;===========P1.4 為觸發系統腳位======
+while:  
+        mov.b   &P1IN, R10
+        and     #16, R10
+        cmp     #1, R10
+        jz      Start
+        jmp     while
+;===========開始5秒紅綠==============
+Start:
+        xor.b   #00001001b, P1OUT // P1.0, P1.3 on
+        xor.b   #10000000b, P4OUT // P4.7 on
+        xor.b   #00000100b, P1OUT // P1.2 on
+        mov     #19, R6
+For:    sub     #1, R6
+        mov     #60000, R5
+Delay:  sub     #1, R5
+        cmp     #0, R5
+        jnz     Delay
+        cmp     #0, R6
+        jnz     For
+        xor.b   #10000000b, P4OUT // P4.7 off
+        xor.b   #00000100b, P1OUT // P1.2 off
+        jmp     Nine
+;===========off 5 seconds============
+Off5s:
+          mov.b   #00000000b, P1OUT // P1.0, P1.3 off; P1.2 off
+          mov.b   #00000000b, P4OUT // P4.7 off
+          mov     #19, R6
+Foroff:   sub     #1, R6
+          mov     #60000, R5
+Delayoff: sub     #1, R5
+          cmp     #0, R5
+          jnz     Delayoff
+          cmp     #0, R6
+          jnz     Foroff
+          jmp     One
+;===========9: R2 R2 R2 R2 G1========
+Nine:   
+        mov     #1, R14
+        mov     #4, R7
+fourR:  sub     #1, R7
+        jmp     Red
+fourr:  cmp     #0, R7
+        jnz     fourR
+        jmp     Green
+fourg:  jmp     Off5s
+;===========1: G1 R2 R2 R2 R2========
+One:    
+        mov     #2, R14
+        jmp     Green
+oneg:   mov     #4, R7
+oneR:   sub     #1, R7
+        jmp     Red
+oner:   cmp     #0, R7
+        jnz     oneR
+        jmp     Over
+;============Red=====================        
+Red:     mov.b   #00001001b, P1OUT // P1.0, P1.3 on
+         jmp     TwoS
+finishR: xor.b   #00001001b, P1OUT // P1.0, P1.3 off
+         mov     #1, R15
+         jmp     Point6
+;============Green===================         
+Green:   mov.b   #10000000b, P4OUT // P4.7 on
+         xor.b   #00000100b, P1OUT // P1.2 on
+         jmp     OneS
+finishG: xor.b  #10000000b, P4OUT // P4.7 off
+         xor.b  #00000100b, P1OUT // P1.2 off
+         mov    #2, R15
+         cmp    #1, R14
+         jnz    Point6
+         jmp    fourg
+;============2 seconds==============      
+TwoS:   
+         mov     #9, R6
+For2s:   sub     #1, R6
+         mov     #60000, R5
+Delay2s: sub     #1, R5
+         cmp     #0, R5
+         jnz     Delay2s
+         cmp     #0, R6
+         jnz     For2s
+         jmp     finishR
+;============1 second=============
+OneS:
+         mov     #5, R6
+For1s:   sub     #1, R6
+         mov     #60000, R5
+Delay1s: sub     #1, R5
+         cmp     #0, R5
+         jnz     Delay1s
+         cmp     #0, R6
+         jnz     For1s
+         jmp     finishG
+;==========0.6s======================
+Point6:
+         mov     #3, R6
+Forp6:   sub     #1, R6
+         mov     #60000, R5
+Delayp6: sub     #1, R5
+         cmp     #0, R5
+         jnz     Delayp6
+         cmp     #0, R6
+         jnz     Forp6
+         cmp     #1, R14
+         jnz     go
+         //9
+         cmp     #1, R15
+         jn      fourg
+         jmp     fourr
+go:      //1
+         cmp     #1, R15
+         jnz      oneg
+         jmp     oner;
+;==========finish=====================
+Over:
+        mov.b   #00000000b, P1OUT // P1.0, P1.3 off; P1.2 off
+        mov.b   #00000000b, P4OUT // P4.7 off
+;=====================================        
+        
+        
+        JMP $                           ; jump to current location '$'
+                                        ; (endless loop)
+        END
